@@ -1,4 +1,16 @@
-import requests
+from flask import Flask, request, jsonify, render_template  
+from dotenv import load_dotenv  # For loading environment variables
+import requests  # For making API requests to OpenWeatherMap
+import os  # For accessing environment variables
+
+# Load environment variables from .env file
+load_dotenv()
+
+# API key from .env 
+api_key = os.getenv("API_KEY")
+aapi_key = os.getenv("BASE_URL")
+# Flask app initialization
+app = Flask(__name__)
 
 # Intents and responses
 intents = {
@@ -7,21 +19,18 @@ intents = {
     "goodbye": ["bye", "goodbye", "see you"]
 }
 
-# API Setup
-API_KEY = "721212d17509a9911fc510bea7d4750e"
-BASE_URL = "https://api.openweathermap.org/data/2.5/weather"
 
-# Function to get weather by latitude and longitude
-def get_weather(lat, lon):
+# Function to get weather by city name
+def get_weather(city_name):
     try:
-        response = requests.get(f"{BASE_URL}?lat={lat}&lon={lon}&appid={API_KEY}&units=metric")
+        response = requests.get(f"{aapi_key}?q={city_name}&appid={api_key}&units=metric")
         data = response.json()
         if data["cod"] != 200:
-            return "Location not found. Please try again."
-        city_name = data["name"]
+            return "City not found. Please try again."
+        city = data["name"]
         temp = data["main"]["temp"]
         weather_desc = data["weather"][0]["description"]
-        return f"The current weather in {city_name} is {temp}°C with {weather_desc}."
+        return f"The current weather in {city} is {temp}°C with {weather_desc}."
     except Exception as e:
         return "Error: Unable to fetch weather data."
 
@@ -34,27 +43,35 @@ def get_intent(user_input):
                 return intent
     return None
 
-# Chatbot conversation
-def chatbot():
-    print("🤖 WeatherBot: Hello! I can give you weather updates.")
-    while True:
-        user_input = input("You: ")
-        intent = get_intent(user_input)
+# Route to render chatbot HTML page
+@app.route('/')
+def home():
+    return render_template('chat.html')  # Renders the chat page
 
-        if intent == "greet":
-            print("🤖 WeatherBot: Hello! How can I help you?")
-        elif intent == "get_weather":
-            try:
-                lat = float(input("🤖 WeatherBot: Please enter the latitude: "))
-                lon = float(input("🤖 WeatherBot: Please enter the longitude: "))
-                print("🤖 WeatherBot:", get_weather(lat, lon))
-            except ValueError:
-                print("🤖 WeatherBot: Invalid input. Please enter numbers for latitude and longitude.")
-        elif intent == "goodbye":
-            print("🤖 WeatherBot: Goodbye! Have a great day.")
-            break
-        else:
-            print("🤖 WeatherBot: I'm sorry, I didn't understand that.")
+# API endpoint to handle user messages
+@app.route('/chat', methods=['POST'])
+def chat():
+    user_message = request.json.get('message')
+    intent = get_intent(user_message)
 
-# Run the chatbot
-chatbot()
+    if intent == "greet":
+        response = "Hello! How can I help you?"
+    elif intent == "get_weather":
+        response = "Please provide a city name."
+    elif intent == "goodbye":
+        response = "Goodbye! Have a great day."
+    else:
+        response = "I'm sorry, I didn't understand that."
+
+    return jsonify({"response": response})
+
+# API endpoint to handle weather requests
+@app.route('/weather', methods=['POST'])
+def weather():
+    city_name = request.json.get('city')
+    response = get_weather(city_name)
+    return jsonify({"response": response})
+
+# Run the Flask app
+if __name__ == '__main__':
+    app.run(debug=True, port=5008)
